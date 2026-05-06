@@ -1,0 +1,178 @@
+name: SaveBite CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Laravel Backend Tests ─────────────────────
+  backend-tests:
+    name: 🧪 Backend Tests (PHP ${{ matrix.php-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-version: ['8.2']
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: savebite_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP ${{ matrix.php-version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring, pdo, pdo_mysql, xml, ctype, json, bcmath
+          coverage: xdebug
+
+      - name: 📦 Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: backend/vendor
+          key: composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-
+
+      - name: 📦 Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: 📝 Setup .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: ⚙️ Configure test environment
+        run: |
+          sed -i 's/DB_CONNECTION=sqlite/DB_CONNECTION=mysql/' .env
+          sed -i 's/# DB_HOST=127.0.0.1/DB_HOST=127.0.0.1/' .env
+          sed -i 's/# DB_PORT=3306/DB_PORT=3306/' .env
+          sed -i 's/# DB_DATABASE=laravel/DB_DATABASE=savebite_test/' .env
+          sed -i 's/# DB_USERNAME=root/DB_USERNAME=root/' .env
+          sed -i 's/# DB_PASSWORD=/DB_PASSWORD=password/' .env
+
+      - name: 🗄️ Run migrations
+        run: php artisan migrate --force
+
+      - name: ✅ Run tests
+        run: php artisan test --parallel
+
+      - name: 📊 Generate test coverage (optional)
+        if: matrix.php-version == '8.2'
+        run: php artisan test --coverage --min=50
+        continue-on-error: true
+
+  # ─── Code Quality ──────────────────────────────
+  code-quality:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo, xml
+          tools: phpstan
+
+      - name: 📦 Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: 🧹 Check PHP syntax
+        run: find app database routes -name "*.php" -exec php -l {} \; | grep -v "No syntax errors"
+        continue-on-error: true
+
+      - name: 🔒 Security audit
+        run: composer audit
+        continue-on-error: true
+
+  # ─── Migration Check ───────────────────────────
+  migration-check:
+    name: 🗄️ Migration Integrity
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: savebite_migrate
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo, pdo_mysql
+
+      - name: 📦 Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: 📝 Setup .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          sed -i 's/DB_CONNECTION=sqlite/DB_CONNECTION=mysql/' .env
+          sed -i 's/# DB_HOST=127.0.0.1/DB_HOST=127.0.0.1/' .env
+          sed -i 's/# DB_PORT=3306/DB_PORT=3306/' .env
+          sed -i 's/# DB_DATABASE=laravel/DB_DATABASE=savebite_migrate/' .env
+          sed -i 's/# DB_USERNAME=root/DB_USERNAME=root/' .env
+          sed -i 's/# DB_PASSWORD=/DB_PASSWORD=password/' .env
+
+      - name: ⬆️ Run migrate up
+        run: php artisan migrate --force
+
+      - name: ⬇️ Run migrate rollback
+        run: php artisan migrate:rollback --force
+
+      - name: 🔄 Run migrate fresh (full cycle)
+        run: php artisan migrate:fresh --force
+
+      - name: ✅ Verify all 14 SaveBite tables exist
+        run: |
+          php artisan tinker --execute="
+            \$expected = ['users','admins','merchants','food_items','orders','order_items','deliveries','disputes','merchant_violations','user_follows','notifications','wallet_transactions','reviews','app_settings'];
+            \$actual = collect(DB::select('SHOW TABLES'))->pluck('Tables_in_savebite_migrate')->toArray();
+            \$missing = array_diff(\$expected, \$actual);
+            if (count(\$missing) > 0) { echo 'MISSING: '.implode(', ', \$missing); exit(1); }
+            echo 'All 14 tables verified!';
+          "
