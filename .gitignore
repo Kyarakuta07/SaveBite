@@ -1,0 +1,26 @@
+# ─── Laravel Backend ─────────────────────────
+backend/vendor/
+backend/node_modules/
+backend/.env
+backend/.env.backup
+backend/.env.production
+backend/.phpunit.result.cache
+backend/Homestead.json
+backend/Homestead.yaml
+backend/auth.json
+backend/npm-debug.log
+backend/yarn-error.log
+backend/storage/*.key
+backend/database/database.sqlite
+
+# ─── IDE & OS ────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Antigravity / Agents ────────────────────
+# Keep .agents folder (skills & workflows are part of the project)
