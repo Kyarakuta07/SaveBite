@@ -73,7 +73,7 @@ jobs:
         run: php artisan migrate --force
 
       - name: ✅ Run tests
-        run: php artisan test --parallel
+        run: php artisan test
 
       - name: 📊 Generate test coverage (optional)
         if: matrix.php-version == '8.2'
@@ -104,8 +104,19 @@ jobs:
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: 🧹 Check PHP syntax
-        run: find app database routes -name "*.php" -exec php -l {} \; | grep -v "No syntax errors"
-        continue-on-error: true
+        run: |
+          errors=0
+          while IFS= read -r file; do
+            if ! php -l "$file" 2>&1 | grep -q "No syntax errors"; then
+              echo "❌ Syntax error in: $file"
+              errors=$((errors + 1))
+            fi
+          done < <(find app database routes -name "*.php")
+          if [ $errors -gt 0 ]; then
+            echo "Found $errors files with syntax errors"
+            exit 1
+          fi
+          echo "✅ All PHP files passed syntax check"
 
       - name: 🔒 Security audit
         run: composer audit
