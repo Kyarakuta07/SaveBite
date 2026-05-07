@@ -17,7 +17,12 @@ class User extends Authenticatable
         'phone',
         'password',
         'avatar',
+        'wallet_balance',
+        'point_balance',
+        'total_saved',
+        'total_rescued',
         'fcm_token',
+        'is_active',
     ];
 
     protected $hidden = [
@@ -75,5 +80,33 @@ class User extends Authenticatable
     public function disputes()
     {
         return $this->hasMany(Dispute::class);
+    }
+
+    public function addresses()
+    {
+        return $this->hasMany(UserAddress::class)->orderByDesc('is_default');
+    }
+
+    public function defaultAddress()
+    {
+        return $this->hasOne(UserAddress::class)->where('is_default', true);
+    }
+
+    // ─── Computed Attributes ────────────────────────
+
+    /**
+     * Badge tier berdasarkan total_saved (Rp).
+     * Matches UI: Mahasiswa Hemat, Pemburu Diskon, Eco Warrior, SaveBite Legend
+     */
+    public function getTierAttribute(): array
+    {
+        $saved = (float) $this->total_saved;
+
+        return match(true) {
+            $saved >= 5_000_000 => ['name' => 'SaveBite Legend',  'icon' => '🏆', 'min_saved' => 5_000_000],
+            $saved >= 1_000_000 => ['name' => 'Eco Warrior',      'icon' => '🌿', 'min_saved' => 1_000_000],
+            $saved >= 200_000  => ['name' => 'Pemburu Diskon',   'icon' => '🎯', 'min_saved' => 200_000],
+            default            => ['name' => 'Mahasiswa Hemat',  'icon' => '🎓', 'min_saved' => 0],
+        };
     }
 }

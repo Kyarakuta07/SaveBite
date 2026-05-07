@@ -2,24 +2,38 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Admin;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // ─── Default Super Admin ─────────────────────────────────────────
+        Admin::firstOrCreate(
+            ['email' => 'admin@savebite.id'],
+            [
+                'name'     => 'SaveBite Admin',
+                'password' => Hash::make('savebite2026!'),
+                'role'     => 'super_admin',
+                'is_active'=> true,
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        Admin::firstOrCreate(
+            ['email' => 'finance@savebite.id'],
+            [
+                'name'     => 'Finance Admin',
+                'password' => Hash::make('savebite2026!'),
+                'role'     => 'finance',
+                'is_active'=> true,
+            ]
+        );
+
+        $this->command->info('✅ Default admin accounts created.');
+        $this->command->info('   📧 admin@savebite.id  | password: savebite2026!');
+        $this->command->info('   📧 finance@savebite.id | password: savebite2026!');
+        $this->command->info('   ⚠️  Ganti password sebelum deploy ke production!');
     }
 }

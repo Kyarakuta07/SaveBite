@@ -23,7 +23,14 @@ class Merchant extends Authenticatable
         'latitude',
         'longitude',
         'operational_hours',
+        'wallet_balance',
+        'average_rating',
+        'total_reviews',
+        'status',
+        'suspension_until',
+        'violation_count',
         'fcm_token',
+        'is_verified',
     ];
 
     protected $hidden = [

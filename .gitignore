@@ -23,4 +23,13 @@ backend/database/database.sqlite
 Thumbs.db
 
 # ─── Antigravity / Agents ────────────────────
-# Keep .agents folder (skills & workflows are part of the project)
+.agents/
+skills-lock.json
+
+# ─── UI Design Assets ────────────────────────
+stitchprdapplicationdesign/
+
+# ─── Documentation (MD files) ────────────────
+# Root-level planning & design docs
+/*.md
+docs/

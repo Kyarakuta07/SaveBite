@@ -18,11 +18,14 @@ class FoodItem extends Model
         'rescue_price',
         'discount_pct',
         'quantity',
+        'quantity_sold',
         'reason',
         'produced_at',
         'expires_at',
         'status',
         'pickup_only',
+        'is_flash_sale',
+        'flash_sale_ends_at',
     ];
 
     protected function casts(): array
@@ -34,8 +37,10 @@ class FoodItem extends Model
             'quantity'        => 'integer',
             'quantity_sold'   => 'integer',
             'pickup_only'     => 'boolean',
+            'is_flash_sale'   => 'boolean',
             'produced_at'     => 'datetime',
             'expires_at'      => 'datetime',
+            'flash_sale_ends_at' => 'datetime',
         ];
     }
 
@@ -78,5 +83,16 @@ class FoodItem extends Model
     public function scopeByMerchant($query, int $merchantId)
     {
         return $query->where('merchant_id', $merchantId);
+    }
+
+    public function scopeFlashSale($query)
+    {
+        return $query->where('is_flash_sale', true)
+                     ->where('status', 'available')
+                     ->where('quantity', '>', 0)
+                     ->where(function ($q) {
+                         $q->whereNull('flash_sale_ends_at')
+                           ->orWhere('flash_sale_ends_at', '>', now());
+                     });
     }
 }
