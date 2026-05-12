@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreOrderRequest;
 use App\Models\AppSetting;
 use App\Models\FoodItem;
 use App\Models\Merchant;
@@ -19,19 +20,9 @@ class OrderController extends Controller
      * POST /api/v1/orders
      * Buat order baru (checkout).
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreOrderRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'merchant_id'      => ['required', 'integer', 'exists:merchants,id'],
-            'items'            => ['required', 'array', 'min:1'],
-            'items.*.food_item_id' => ['required', 'integer', 'exists:food_items,id'],
-            'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'payment_method'   => ['required', 'in:wallet,qris,e_wallet,bank_transfer'],
-            'delivery_address' => ['required_if:payment_method,qris,e_wallet,bank_transfer', 'nullable', 'string'],
-            'delivery_lat'     => ['nullable', 'numeric'],
-            'delivery_lng'     => ['nullable', 'numeric'],
-            'notes'            => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         // Validate merchant is active (prevent checkout to suspended/banned merchants)
         $checkMerchant = Merchant::findOrFail($validated['merchant_id']);
@@ -300,22 +291,29 @@ class OrderController extends Controller
                 FoodItem::where('id', $item->food_item_id)->increment('quantity', $item->quantity);
             }
 
-            // 2. Refund to wallet with audit trail
-            $user = User::where('id', $order->user_id)->lockForUpdate()->first();
+            // 2. Refund based on original payment method
+            if ($order->payment_method === 'wallet') {
+                // Wallet payment: refund directly to user wallet
+                $user = User::where('id', $order->user_id)->lockForUpdate()->first();
 
-            WalletTransaction::create([
-                'owner_type'     => 'user',
-                'owner_id'       => $user->id,
-                'type'           => 'refund',
-                'amount'         => $order->total_amount,
-                'balance_before' => $user->wallet_balance,
-                'balance_after'  => $user->wallet_balance + $order->total_amount,
-                'reference_type' => 'order',
-                'reference_id'   => $order->id,
-                'description'    => "Refund order {$order->order_code}",
-            ]);
+                WalletTransaction::create([
+                    'owner_type'     => 'user',
+                    'owner_id'       => $user->id,
+                    'type'           => 'refund',
+                    'amount'         => $order->total_amount,
+                    'balance_before' => $user->wallet_balance,
+                    'balance_after'  => $user->wallet_balance + $order->total_amount,
+                    'reference_type' => 'order',
+                    'reference_id'   => $order->id,
+                    'description'    => "Refund order {$order->order_code}",
+                ]);
 
-            $user->increment('wallet_balance', $order->total_amount);
+                $user->increment('wallet_balance', $order->total_amount);
+            }
+            // For non-wallet payments (qris, e_wallet, bank_transfer):
+            // The money was collected by Midtrans, not deducted from wallet.
+            // Mark as refunded — actual refund processed via Midtrans Refund API.
+            // TODO: Trigger Midtrans refund API call when production keys are set.
 
             // 3. Update order status
             $order->update([
@@ -324,9 +322,13 @@ class OrderController extends Controller
             ]);
         });
 
+        $refundMessage = $order->payment_method === 'wallet'
+            ? 'Order berhasil dibatalkan. Refund telah dikembalikan ke wallet Anda.'
+            : 'Order berhasil dibatalkan. Refund akan diproses dalam 1-3 hari kerja.';
+
         return response()->json([
             'success' => true,
-            'message' => 'Order berhasil dibatalkan. Refund telah dikembalikan ke wallet Anda.',
+            'message' => $refundMessage,
         ]);
     }
 

@@ -76,25 +76,29 @@ class Order extends Model
         return $this->hasOne(Review::class);
     }
 
-    // ─── Business Logic ─────────────────────────────
-
     /**
      * Generate kode order: SB-YYYYMMDD-XXXX
+     *
+     * Uses atomic DB operation to prevent race conditions.
+     * Two concurrent requests can no longer generate the same code.
      */
     public static function generateOrderCode(): string
     {
         $date = now()->format('Ymd');
-        $lastOrder = static::where('order_code', 'like', "SB-{$date}-%")
-                           ->orderBy('order_code', 'desc')
-                           ->first();
+        $prefix = "SB-{$date}-";
 
-        if ($lastOrder) {
-            $lastNumber = (int) substr($lastOrder->order_code, -4);
-            $nextNumber = $lastNumber + 1;
+        // Atomic: get MAX existing sequence number with lock
+        $lastCode = static::where('order_code', 'like', "{$prefix}%")
+                          ->lockForUpdate()
+                          ->orderBy('order_code', 'desc')
+                          ->value('order_code');
+
+        if ($lastCode) {
+            $nextNumber = ((int) substr($lastCode, -4)) + 1;
         } else {
             $nextNumber = 1;
         }
 
-        return sprintf('SB-%s-%04d', $date, $nextNumber);
+        return sprintf('%s%04d', $prefix, $nextNumber);
     }
 }

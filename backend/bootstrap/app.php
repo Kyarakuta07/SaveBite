@@ -21,5 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Return JSON 401 for API requests — prevents redirect to named route "login"
+        // which doesn't exist in this API-only project.
+        $exceptions->shouldRenderJsonWhen(function ($request, $e) {
+            return $request->is('api/*') || $request->expectsJson();
+        });
     })->create();

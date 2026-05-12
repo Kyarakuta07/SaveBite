@@ -90,7 +90,9 @@ class UserAuthController extends Controller
         return response()->json([
             'success' => true,
             'data'    => array_merge($user->toArray(), [
-                'tier' => $user->tier,
+                'total_orders' => $user->total_orders,
+                'tier'         => $user->tier,
+                'tier_detail'  => $user->tier_detail,
             ]),
         ]);
     }

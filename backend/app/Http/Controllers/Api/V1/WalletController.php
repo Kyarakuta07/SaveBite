@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\TopUpRequest;
 use App\Models\Merchant;
 use App\Models\WalletTransaction;
 use Illuminate\Http\JsonResponse;
@@ -19,9 +20,12 @@ class WalletController extends Controller
     {
         $user = $request->user();
 
+        // Only count CONFIRMED top-ups (exclude PENDING/FAILED orphans)
         $totalTopUp = WalletTransaction::where('owner_type', 'user')
             ->where('owner_id', $user->id)
             ->where('type', 'topup')
+            ->where('description', 'not like', 'PENDING:%')
+            ->where('description', 'not like', 'FAILED:%')
             ->sum('amount');
 
         $totalSpent = WalletTransaction::where('owner_type', 'user')
@@ -43,26 +47,23 @@ class WalletController extends Controller
      * POST /api/v1/me/wallet/topup
      * Request top-up (return payment URL).
      */
-    public function topup(Request $request): JsonResponse
+    public function topup(TopUpRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'amount'         => ['required', 'integer', 'min:10000', 'max:10000000'],
-            'payment_method' => ['required', 'in:qris,e_wallet,bank_transfer'],
-        ]);
-
+        $validated = $request->validated();
         $user = $request->user();
 
-        // Create pending wallet transaction
+        // Create pending wallet transaction (will be confirmed by webhook)
+        // Using 'description' to track status until a dedicated 'status' column is added.
         $tx = WalletTransaction::create([
             'owner_type'     => 'user',
             'owner_id'       => $user->id,
             'type'           => 'topup',
             'amount'         => $validated['amount'],
             'balance_before' => $user->wallet_balance,
-            'balance_after'  => $user->wallet_balance, // Updated when payment confirmed
+            'balance_after'  => $user->wallet_balance, // Updated when webhook confirms payment
             'reference_type' => 'topup',
-            'reference_id'   => null,
-            'description'    => 'Top-up wallet via ' . strtoupper($validated['payment_method']),
+            'reference_id'   => null, // Set to Midtrans transaction_id by webhook
+            'description'    => 'PENDING: Top-up wallet via ' . strtoupper($validated['payment_method']),
         ]);
 
         // TODO: Create Midtrans payment → return payment_url
@@ -84,11 +85,23 @@ class WalletController extends Controller
     /**
      * GET /api/v1/me/wallet/transactions
      * Riwayat mutasi saldo user.
+     *
+     * Excludes PENDING and FAILED top-up records to avoid confusing users.
+     * Only shows completed, real financial activity.
      */
     public function userTransactions(Request $request): JsonResponse
     {
         $transactions = WalletTransaction::where('owner_type', 'user')
             ->where('owner_id', $request->user()->id)
+            ->where(function ($query) {
+                // Show all non-topup transactions + only confirmed top-ups
+                $query->where('type', '!=', 'topup')
+                      ->orWhere(function ($q) {
+                          $q->where('type', 'topup')
+                            ->where('description', 'not like', 'PENDING:%')
+                            ->where('description', 'not like', 'FAILED:%');
+                      });
+            })
             ->latest('created_at')
             ->paginate(20);
 

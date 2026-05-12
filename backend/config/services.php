@@ -35,4 +35,31 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Midtrans Payment Gateway
+    |--------------------------------------------------------------------------
+    | Used by WebhookController to verify payment callback signatures.
+    | Set MIDTRANS_IS_PRODUCTION=true for production environment.
+    */
+    'midtrans' => [
+        'server_key'    => env('MIDTRANS_SERVER_KEY', ''),
+        'client_key'    => env('MIDTRANS_CLIENT_KEY', ''),
+        'is_production' => env('MIDTRANS_IS_PRODUCTION', false),
+        'snap_url'      => env('MIDTRANS_IS_PRODUCTION', false)
+            ? 'https://app.midtrans.com/snap/v2/vtweb/'
+            : 'https://app.sandbox.midtrans.com/snap/v2/vtweb/',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logistics Provider (GrabExpress / Lalamove)
+    |--------------------------------------------------------------------------
+    | Used by WebhookController to verify delivery status callbacks.
+    */
+    'logistics' => [
+        'webhook_key' => env('LOGISTICS_WEBHOOK_KEY', 'savebite-delivery-key'),
+        'provider'    => env('LOGISTICS_PROVIDER', 'mock'),
+    ],
+
 ];

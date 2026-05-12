@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreDisputeRequest;
 use App\Models\AppSetting;
 use App\Models\Dispute;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +15,7 @@ class DisputeController extends Controller
      * POST /api/v1/orders/{id}/dispute
      * Ajukan komplain (max 60 menit setelah delivered).
      */
-    public function store(Request $request, int $orderId): JsonResponse
+    public function store(StoreDisputeRequest $request, int $orderId): JsonResponse
     {
         $order = $request->user()->orders()->with(['dispute', 'delivery'])->findOrFail($orderId);
 
@@ -45,11 +46,7 @@ class DisputeController extends Controller
             ], 422);
         }
 
-        $validated = $request->validate([
-            'reason'      => ['required', 'string', 'max:1000'],
-            'photo_proof' => ['required', 'image', 'max:10240'],
-            'video_proof' => ['required', 'mimes:mp4,mov,avi', 'max:51200'],
-        ]);
+        $validated = $request->validated();
 
         $photoPath = $request->file('photo_proof')->store('disputes/photos', 'public');
         $videoPath = $request->file('video_proof')->store('disputes/videos', 'public');

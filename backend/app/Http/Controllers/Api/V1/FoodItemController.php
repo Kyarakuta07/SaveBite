@@ -21,6 +21,7 @@ class FoodItemController extends Controller
             'lng'      => ['nullable', 'numeric'],
             'radius'   => ['nullable', 'integer', 'min:1', 'max:100'],
             'category' => ['nullable', 'in:fast_food,bakery,supermarket'],
+            'merchant_id' => ['nullable', 'integer', 'exists:merchants,id'],
             'search'   => ['nullable', 'string', 'max:100'],
             'sort_by'  => ['nullable', 'in:distance,price,newest'],
             'page'     => ['nullable', 'integer', 'min:1'],
@@ -34,6 +35,10 @@ class FoodItemController extends Controller
         // Filter by category
         if (! empty($validated['category'])) {
             $query->whereHas('merchant', fn ($q) => $q->where('category', $validated['category']));
+        }
+
+        if (! empty($validated['merchant_id'])) {
+            $query->where('merchant_id', $validated['merchant_id']);
         }
 
         // Search by food name
@@ -91,6 +96,12 @@ class FoodItemController extends Controller
                 'produced_at'    => $item->produced_at,
                 'expires_at'     => $item->expires_at,
                 'status'         => $item->status,
+                'pickup_only'    => $item->pickup_only,
+                'is_flash_sale'  => $item->is_flash_sale,
+                'flash_sale_ends_at' => $item->flash_sale_ends_at,
+                'seconds_remaining'  => ($item->is_flash_sale && $item->flash_sale_ends_at)
+                    ? max(0, now()->diffInSeconds($item->flash_sale_ends_at, false))
+                    : null,
             ];
         });
 
@@ -130,6 +141,11 @@ class FoodItemController extends Controller
                     'category'       => $merchant->category,
                     'average_rating' => $merchant->average_rating,
                     'total_reviews'  => $merchant->total_reviews,
+                    'logo'           => $merchant->logo ? asset('storage/' . $merchant->logo) : null,
+                    'address'        => $merchant->is_anonymous ? null : $merchant->address,
+                    'latitude'       => $merchant->is_anonymous ? null : $merchant->latitude,
+                    'longitude'      => $merchant->is_anonymous ? null : $merchant->longitude,
+                    'operational_hours' => $merchant->operational_hours,
                 ],
                 'name'           => $item->name,
                 'description'    => $item->description,
@@ -144,6 +160,11 @@ class FoodItemController extends Controller
                 'expires_at'     => $item->expires_at,
                 'pickup_only'    => $item->pickup_only,
                 'status'         => $item->status,
+                'is_flash_sale'  => $item->is_flash_sale,
+                'flash_sale_ends_at' => $item->flash_sale_ends_at,
+                'seconds_remaining'  => ($item->is_flash_sale && $item->flash_sale_ends_at)
+                    ? max(0, now()->diffInSeconds($item->flash_sale_ends_at, false))
+                    : null,
             ],
         ]);
     }
@@ -200,24 +221,45 @@ class FoodItemController extends Controller
     public function flashSale(Request $request): JsonResponse
     {
         $items = FoodItem::flashSale()
-            ->with(['merchant:id,display_name,name,is_anonymous,category,latitude,longitude'])
+            ->with(['merchant:id,display_name,name,is_anonymous,category,average_rating,total_reviews,latitude,longitude'])
             ->orderBy('flash_sale_ends_at')
             ->take(20)
             ->get()
             ->map(function (FoodItem $item) {
-                $data = $item->toArray();
+                $merchant    = $item->merchant;
+                $displayName = $merchant->is_anonymous
+                    ? ($merchant->display_name ?? 'Mitra SaveBite #' . $merchant->id)
+                    : ($merchant->display_name ?? $merchant->name);
 
-                // Tambah seconds_remaining untuk countdown timer di Flutter
-                $data['seconds_remaining'] = $item->flash_sale_ends_at
-                    ? max(0, now()->diffInSeconds($item->flash_sale_ends_at, false))
-                    : null;
-
-                // Sembunyikan nama asli merchant jika anonymous
-                if ($item->merchant && $item->merchant->is_anonymous) {
-                    $data['merchant']['name'] = $data['merchant']['display_name'] ?? 'Mitra SaveBite';
-                }
-
-                return $data;
+                return [
+                    'id'               => $item->id,
+                    'merchant'         => [
+                        'id'             => $merchant->id,
+                        'display_name'   => $displayName,
+                        'is_anonymous'   => $merchant->is_anonymous,
+                        'category'       => $merchant->category,
+                        'average_rating' => $merchant->average_rating,
+                        'total_reviews'  => $merchant->total_reviews,
+                    ],
+                    'name'             => $item->name,
+                    'description'      => $item->description,
+                    'image'            => $item->image ? asset('storage/' . $item->image) : null,
+                    'original_price'   => $item->original_price,
+                    'rescue_price'     => $item->rescue_price,
+                    'discount_pct'     => $item->discount_pct,
+                    'quantity'         => $item->quantity,
+                    'quantity_sold'    => $item->quantity_sold,
+                    'reason'           => $item->reason,
+                    'produced_at'      => $item->produced_at,
+                    'expires_at'       => $item->expires_at,
+                    'status'           => $item->status,
+                    'pickup_only'      => $item->pickup_only,
+                    'is_flash_sale'    => true,
+                    'flash_sale_ends_at' => $item->flash_sale_ends_at,
+                    'seconds_remaining'  => $item->flash_sale_ends_at
+                        ? max(0, now()->diffInSeconds($item->flash_sale_ends_at, false))
+                        : null,
+                ];
             });
 
         return response()->json([

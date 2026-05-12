@@ -95,10 +95,38 @@ class User extends Authenticatable
     // ─── Computed Attributes ────────────────────────
 
     /**
-     * Badge tier berdasarkan total_saved (Rp).
-     * Matches UI: Mahasiswa Hemat, Pemburu Diskon, Eco Warrior, SaveBite Legend
+     * Total completed orders (computed, no DB column needed).
+     * Used by Flutter User model and tier display.
      */
-    public function getTierAttribute(): array
+    public function getTotalOrdersAttribute(): int
+    {
+        return $this->orders()->where('order_status', 'completed')->count();
+    }
+
+    /**
+     * Badge tier name (string) for API responses.
+     * Flutter reads this as String — MUST return a string, not array.
+     *
+     * Based on total_saved (Rp accumulated savings).
+     * Thresholds: 0 → 200k → 1M → 5M
+     */
+    public function getTierAttribute(): string
+    {
+        $saved = (float) $this->total_saved;
+
+        return match(true) {
+            $saved >= 5_000_000 => 'SaveBite Legend',
+            $saved >= 1_000_000 => 'Eco Warrior',
+            $saved >= 200_000  => 'Pemburu Diskon',
+            default            => 'Mahasiswa Hemat',
+        };
+    }
+
+    /**
+     * Full tier detail (array) for admin panels or detailed UI.
+     * Access via: $user->tier_detail
+     */
+    public function getTierDetailAttribute(): array
     {
         $saved = (float) $this->total_saved;
 

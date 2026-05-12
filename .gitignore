@@ -13,6 +13,22 @@ backend/yarn-error.log
 backend/storage/*.key
 backend/database/database.sqlite
 
+# ─── Flutter Mobile ───────────────────────────
+mobile/.dart_tool/
+mobile/.packages
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+mobile/android/app/release/
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Runner.xcworkspace/xcuserdata/
+mobile/ios/Flutter/Generated.xcconfig
+mobile/pubspec.lock
+
 # ─── IDE & OS ────────────────────────────────
 .idea/
 .vscode/

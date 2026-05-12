@@ -20,3 +20,8 @@ Schedule::command('food:expire-stale')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+Schedule::command('orders:auto-complete')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/scheduler.log'));

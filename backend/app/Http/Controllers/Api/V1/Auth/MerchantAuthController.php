@@ -42,7 +42,12 @@ class MerchantAuthController extends Controller
             'latitude'          => $validated['latitude'],
             'longitude'         => $validated['longitude'],
             'operational_hours' => $validated['operational_hours'] ?? null,
+            'status'            => 'active',   // eksplisit set agar PHP model tidak null
+            'is_verified'       => false,       // eksplisit set agar PHP model tidak null
         ]);
+
+        // fresh() memastikan semua nilai diambil ulang dari database
+        $merchant = $merchant->fresh();
 
         $token = $merchant->createToken('merchant-token')->plainTextToken;
 
@@ -50,8 +55,16 @@ class MerchantAuthController extends Controller
             'success' => true,
             'message' => 'Registrasi mitra berhasil. Menunggu verifikasi admin.',
             'data'    => [
-                'merchant' => $merchant->only(['id', 'name', 'display_name', 'category', 'status']),
-                'token'    => $token,
+                'merchant' => [
+                    'id'          => $merchant->id,
+                    'name'        => $merchant->name,
+                    'display_name'=> $merchant->display_name,
+                    'category'    => $merchant->category,
+                    'status'      => $merchant->status,       // 'active'
+                    'is_verified' => $merchant->is_verified,  // false
+                    'keterangan'  => 'Menunggu verifikasi admin',
+                ],
+                'token' => $token,
             ],
         ], 201);
     }

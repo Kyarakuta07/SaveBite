@@ -29,16 +29,22 @@ class Review extends Model
     public function merchant() { return $this->belongsTo(Merchant::class); }
 
     /**
-     * Auto-update merchant average_rating saat review dibuat.
+     * Auto-update merchant average_rating when reviews change.
      */
     protected static function booted(): void
     {
-        static::created(function (Review $review) {
+        $recalculate = function (Review $review): void {
             $merchant = $review->merchant;
-            $merchant->update([
-                'average_rating' => $merchant->reviews()->avg('rating'),
-                'total_reviews'  => $merchant->reviews()->count(),
-            ]);
-        });
+            if ($merchant) {
+                $merchant->update([
+                    'average_rating' => $merchant->reviews()->avg('rating') ?? 0,
+                    'total_reviews'  => $merchant->reviews()->count(),
+                ]);
+            }
+        };
+
+        static::created($recalculate);
+        static::updated($recalculate);
+        static::deleted($recalculate);
     }
 }

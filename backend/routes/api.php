@@ -33,22 +33,22 @@ Route::prefix('v1')->group(function () {
     // ─────────────────────────────────────────────────────────────────────
 
     // 1. Auth User (Public)
-    Route::prefix('auth')->group(function () {
+    Route::prefix('auth')->middleware('throttle:auth')->group(function () {
         Route::post('register', [UserAuthController::class, 'register']);
         Route::post('login',    [UserAuthController::class, 'login']);
     });
 
     // 2. Auth Merchant (Public)
-    Route::prefix('merchant/auth')->group(function () {
+    Route::prefix('merchant/auth')->middleware('throttle:auth')->group(function () {
         Route::post('register', [MerchantAuthController::class, 'register']);
         Route::post('login',    [MerchantAuthController::class, 'login']);
     });
 
     // 3. Auth Admin (Public)
-    Route::post('admin/auth/login', [AdminAuthController::class, 'login']);
+    Route::post('admin/auth/login', [AdminAuthController::class, 'login'])->middleware('throttle:auth');
 
     // 8. Webhooks (no auth, verified by signature/api-key)
-    Route::prefix('webhooks')->group(function () {
+    Route::prefix('webhooks')->middleware('throttle:webhooks')->group(function () {
         Route::post('midtrans', [WebhookController::class, 'midtrans']);
         Route::post('delivery', [WebhookController::class, 'delivery']);
     });
@@ -56,7 +56,7 @@ Route::prefix('v1')->group(function () {
     // ─────────────────────────────────────────────────────────────────────
     // USER ROUTES (auth:sanctum + role:user)
     // ─────────────────────────────────────────────────────────────────────
-    Route::middleware(['auth:sanctum', 'role:user'])->group(function () {
+    Route::middleware(['auth:sanctum', 'role:user', 'throttle:api'])->group(function () {
 
         // 1. Auth User (Protected)
         Route::prefix('auth')->group(function () {
@@ -73,9 +73,9 @@ Route::prefix('v1')->group(function () {
         Route::get('food-items/{id}',      [FoodItemController::class, 'show']);
         Route::get('merchants/{id}',       [FoodItemController::class, 'merchantProfile']);
 
-        // 5. Orders (User)
+        // 5. Orders (User) — financial operations rate-limited
         Route::get('orders',                    [OrderController::class, 'index']);
-        Route::post('orders',                   [OrderController::class, 'store']);
+        Route::post('orders',                   [OrderController::class, 'store'])->middleware('throttle:financial');
         Route::get('orders/{id}',               [OrderController::class, 'show']);
         Route::post('orders/{id}/complete',     [OrderController::class, 'complete']);
         Route::post('orders/{id}/cancel',       [OrderController::class, 'cancel']);
@@ -100,9 +100,9 @@ Route::prefix('v1')->group(function () {
         Route::get('me/notifications',               [SocialController::class, 'notifications']);
         Route::post('me/notifications/read-all',     [SocialController::class, 'readAllNotifications']);
 
-        // 12. Wallet (User)
+        // 12. Wallet (User) — financial rate limit on topup
         Route::get('me/wallet',                      [WalletController::class, 'userWallet']);
-        Route::post('me/wallet/topup',               [WalletController::class, 'topup']);
+        Route::post('me/wallet/topup',               [WalletController::class, 'topup'])->middleware('throttle:financial');
         Route::get('me/wallet/transactions',         [WalletController::class, 'userTransactions']);
 
         // 13. Saved Addresses (User)
@@ -116,7 +116,7 @@ Route::prefix('v1')->group(function () {
     // ─────────────────────────────────────────────────────────────────────
     // MERCHANT ROUTES (auth:sanctum + role:merchant)
     // ─────────────────────────────────────────────────────────────────────
-    Route::prefix('merchant')->middleware(['auth:sanctum', 'role:merchant'])->group(function () {
+    Route::prefix('merchant')->middleware(['auth:sanctum', 'role:merchant', 'throttle:api'])->group(function () {
 
         // 2. Auth Merchant (Protected)
         Route::prefix('auth')->group(function () {
@@ -144,13 +144,13 @@ Route::prefix('v1')->group(function () {
         // 12. Wallet (Merchant)
         Route::get('wallet',                               [WalletController::class, 'merchantWallet']);
         Route::get('wallet/transactions',                  [WalletController::class, 'merchantTransactions']);
-        Route::post('wallet/withdraw',                     [WalletController::class, 'withdraw']);
+        Route::post('wallet/withdraw',                     [WalletController::class, 'withdraw'])->middleware('throttle:financial');
     });
 
     // ─────────────────────────────────────────────────────────────────────
     // ADMIN ROUTES (auth:sanctum + role:admin)
     // ─────────────────────────────────────────────────────────────────────
-    Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::prefix('admin')->middleware(['auth:sanctum', 'role:admin', 'throttle:api'])->group(function () {
 
         // 13. Admin Panel
         Route::get('dashboard',                     [AdminController::class, 'dashboard']);
